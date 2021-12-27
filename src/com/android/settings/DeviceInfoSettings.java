@@ -46,19 +46,27 @@ import com.android.settingslib.RestrictedLockUtils;
 import com.android.internal.os.RegionalizationEnvironment;
 import com.android.internal.os.IRegionalizationService;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.android.settingslib.RestrictedLockUtils.EnforcedAdmin;
 
 public class DeviceInfoSettings extends SettingsPreferenceFragment implements Indexable {
 
     private static final String LOG_TAG = "DeviceInfoSettings";
+    private static final String FILENAME_PROC_VERSION = "/proc/version";
+    private static final String FILENAME_PROC_MEMINFO = "/proc/meminfo";
+    private static final String FILENAME_PROC_CPUINFO = "/proc/cpuinfo";
 
     private static final String KEY_MANUAL = "manual";
     private static final String KEY_REGULATORY_INFO = "regulatory_info";
-    private static final String KEY_SYSTEM_UPDATE_SETTINGS = "system_update_settings";
     private static final String PROPERTY_URL_SAFETYLEGAL = "ro.url.safetylegal";
     private static final String PROPERTY_SELINUX_STATUS = "ro.build.selinux";
     private static final String KEY_KERNEL_VERSION = "kernel_version";
@@ -69,7 +77,6 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
     private static final String KEY_BASEBAND_VERSION = "baseband_version";
     private static final String KEY_FIRMWARE_VERSION = "firmware_version";
     private static final String KEY_SECURITY_PATCH = "security_patch";
-    private static final String KEY_UPDATE_SETTING = "additional_system_update_settings";
     private static final String KEY_EQUIPMENT_ID = "fcc_equipment_id";
     private static final String PROPERTY_EQUIPMENT_ID = "ro.ril.fccid";
     private static final String KEY_DEVICE_FEEDBACK = "device_feedback";
@@ -82,7 +89,8 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
     private static final String QGP_VERSION_PATH = "/persist/speccfg/qgpversion";
     private static final String KEY_MOD_VERSION = "mod_version";
     private static final String KEY_MOD_BUILD_DATE = "build_date";
-    private static final String KEY_MOD_API_LEVEL = "mod_api_level";
+    private static final String KEY_DEVICE_MEMORY = "device_memory";
+    private static final String KEY_DEVICE_PROCESSOR = "device_processor";
 
     static final int TAPS_TO_BE_A_DEVELOPER = 7;
 
@@ -139,19 +147,18 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         if(mQGPVersion == null){
             getPreferenceScreen().removePreference(findPreference(KEY_QGP_VERSION));
         }
-        findPreference(KEY_KERNEL_VERSION).setSummary(DeviceInfoUtils.customizeFormatKernelVersion(
-                getResources().getBoolean(R.bool.def_hide_kernel_version_name)));
         String mMbnVersion = getMBNVersionValue();
         setStringSummary(KEY_MBN_VERSION, mMbnVersion);
         if(mMbnVersion == null){
             getPreferenceScreen().removePreference(findPreference(KEY_MBN_VERSION));
         }
-        findPreference(KEY_MOD_VERSION).setSummary(
-                cyanogenmod.os.Build.CYANOGENMOD_DISPLAY_VERSION);
-        findPreference(KEY_MOD_VERSION).setEnabled(true);
         setValueSummary(KEY_MOD_BUILD_DATE, "ro.build.date");
-        setExplicitValueSummary(KEY_MOD_API_LEVEL, constructApiLevelString());
-        findPreference(KEY_MOD_API_LEVEL).setEnabled(true);
+        setStringSummary(KEY_KERNEL_VERSION, getFormattedKernelVersion());
+        findPreference(KEY_KERNEL_VERSION).setEnabled(true);
+        setValueSummary(KEY_MOD_VERSION, "ro.crdroid.display.version");
+        findPreference(KEY_MOD_VERSION).setEnabled(true);
+        setStringSummary(KEY_DEVICE_MEMORY, getDeviceMemoryInfo());
+        setStringSummary(KEY_DEVICE_PROCESSOR, getDeviceProcessorInfo());
 
         if (!SELinux.isSELinuxEnabled()) {
             String status = getResources().getString(R.string.selinux_status_disabled);
@@ -159,14 +166,13 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         } else if (!SELinux.isSELinuxEnforced()) {
             String status = getResources().getString(R.string.selinux_status_permissive);
             setStringSummary(KEY_SELINUX_STATUS, status);
+        } else {
+            String status = getResources().getString(R.string.selinux_status_enforcing);
+            setStringSummary(KEY_SELINUX_STATUS, status);
         }
 
         setStringSummary(KEY_DEVICE_NAME, Build.PRODUCT);
         removePreferenceIfBoolFalse(KEY_DEVICE_NAME, R.bool.config_displayDeviceName);
-
-        // Remove selinux information if property is not present
-        removePreferenceIfPropertyMissing(getPreferenceScreen(), KEY_SELINUX_STATUS,
-                PROPERTY_SELINUX_STATUS);
 
         // Remove Safety information preference if PROPERTY_URL_SAFETYLEGAL is not set
         removePreferenceIfPropertyMissing(getPreferenceScreen(), KEY_SAFETY_LEGAL,
@@ -195,19 +201,6 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         // These are contained by the root preference screen
         PreferenceGroup parentPreference = getPreferenceScreen();
 
-        if (mUm.isAdminUser()) {
-            Utils.updatePreferenceToSpecificActivityOrRemove(act, parentPreference,
-                    KEY_SYSTEM_UPDATE_SETTINGS,
-                    Utils.UPDATE_PREFERENCE_FLAG_SET_TITLE_TO_MATCHING_ACTIVITY);
-        } else {
-            // Remove for secondary users
-            removePreference(KEY_SYSTEM_UPDATE_SETTINGS);
-        }
-
-        // Read platform settings for additional system update setting
-        removePreferenceIfBoolFalse(KEY_UPDATE_SETTING,
-                R.bool.config_additional_system_update_setting_enable);
-
         // Remove manual entry if none present.
         removePreferenceIfBoolFalse(KEY_MANUAL, R.bool.config_show_manual);
 
@@ -231,9 +224,12 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
     @Override
     public void onResume() {
         super.onResume();
+        boolean mDevEnabled = Settings.Global.getInt(getActivity().getContentResolver(),
+                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1) == 1;
+        int tapsRequired = mDevEnabled ? -1 : TAPS_TO_BE_A_DEVELOPER;
         mDevHitCountdown = getActivity().getSharedPreferences(DevelopmentSettings.PREF_FILE,
                 Context.MODE_PRIVATE).getBoolean(DevelopmentSettings.PREF_SHOW,
-                        android.os.Build.TYPE.equals("eng")) ? -1 : TAPS_TO_BE_A_DEVELOPER;
+                        android.os.Build.TYPE.equals("eng")) ? -1 : tapsRequired;
         mDevHitToast = null;
         mFunDisallowedAdmin = RestrictedLockUtils.checkIfRestrictionEnforced(
                 getActivity(), UserManager.DISALLOW_FUN, UserHandle.myUserId());
@@ -333,13 +329,9 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
             }
         } else if (preference.getKey().equals(KEY_DEVICE_FEEDBACK)) {
             sendFeedback();
-        } else if(preference.getKey().equals(KEY_SYSTEM_UPDATE_SETTINGS)) {
-            CarrierConfigManager configManager =
-                    (CarrierConfigManager) getSystemService(Context.CARRIER_CONFIG_SERVICE);
-            PersistableBundle b = configManager.getConfig();
-            if (b != null && b.getBoolean(CarrierConfigManager.KEY_CI_ACTION_ON_SYS_UPDATE_BOOL)) {
-                ciActionOnSysUpdate(b);
-            }
+        } else if (preference.getKey().equals(KEY_KERNEL_VERSION)) {
+            setStringSummary(KEY_KERNEL_VERSION, getKernelVersion());
+            return true;
         }
         return super.onPreferenceTreeClick(preference);
     }
@@ -476,12 +468,74 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
         startActivityForResult(intent, 0);
     }
 
-    private static String constructApiLevelString() {
-        int sdkInt = cyanogenmod.os.Build.CM_VERSION.SDK_INT;
-        StringBuilder builder = new StringBuilder();
-        builder.append(cyanogenmod.os.Build.getNameForSDKInt(sdkInt))
-                .append(" (" + sdkInt + ")");
-        return builder.toString();
+    private String getKernelVersion() {
+        String procVersionStr;
+        try {
+            procVersionStr = readLine(FILENAME_PROC_VERSION);
+            return procVersionStr;
+        } catch (IOException e) {
+            Log.e(LOG_TAG,
+                "IO Exception when getting kernel version for Device Info screen",
+                e);
+
+            return "Unavailable";
+        }
+    }
+
+    /**
+     * Reads a line from the specified file.
+     * @param filename the file to read from
+     * @return the first line, if any.
+     * @throws IOException if the file couldn't be read
+     */
+    private static String readLine(String filename) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(filename), 256);
+        try {
+            return reader.readLine();
+        } finally {
+            reader.close();
+        }
+    }
+
+    public static String getFormattedKernelVersion() {
+        try {
+            return formatKernelVersion(readLine(FILENAME_PROC_VERSION));
+
+        } catch (IOException e) {
+            Log.e(LOG_TAG,
+                "IO Exception when getting kernel version for Device Info screen",
+                e);
+
+            return "Unavailable";
+        }
+    }
+
+    public static String formatKernelVersion(String rawKernelVersion) {
+        // Example (see tests for more):
+        // Linux version 3.0.31-g6fb96c9 (android-build@xxx.xxx.xxx.xxx.com) \
+        //     (gcc version 4.6.x-xxx 20120106 (prerelease) (GCC) ) #1 SMP PREEMPT \
+        //     Thu Jun 28 11:02:39 PDT 2012
+
+        final String PROC_VERSION_REGEX =
+            "Linux version (\\S+) " + /* group 1: "3.0.31-g6fb96c9" */
+            "\\((\\S+?)\\) " +        /* group 2: "x@y.com" (kernel builder) */
+            "(?:\\(gcc.+? \\)) " +    /* ignore: GCC version information */
+            "(#\\d+) " +              /* group 3: "#1" */
+            "(?:.*?)?" +              /* ignore: optional SMP, PREEMPT, and any CONFIG_FLAGS */
+            "((Sun|Mon|Tue|Wed|Thu|Fri|Sat).+)"; /* group 4: "Thu Jun 28 11:02:39 PDT 2012" */
+
+        Matcher m = Pattern.compile(PROC_VERSION_REGEX).matcher(rawKernelVersion);
+        if (!m.matches()) {
+            Log.e(LOG_TAG, "Regex did not match on /proc/version: " + rawKernelVersion);
+            return "Unavailable";
+        } else if (m.groupCount() < 4) {
+            Log.e(LOG_TAG, "Regex match on /proc/version only returned " + m.groupCount()
+                    + " groups");
+            return "Unavailable";
+        }
+        return m.group(1) + "\n" +                 // 3.0.31-g6fb96c9
+            m.group(2) + " " + m.group(3) + "\n" + // x@y.com #1
+            m.group(4);                            // Thu Jun 28 11:02:39 PDT 2012
     }
 
     private static class SummaryProvider implements SummaryLoader.SummaryProvider {
@@ -546,15 +600,6 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
                 if (TextUtils.isEmpty(DeviceInfoUtils.getFeedbackReporterPackage(context))) {
                     keys.add(KEY_DEVICE_FEEDBACK);
                 }
-                final UserManager um = UserManager.get(context);
-                // TODO: system update needs to be fixed for non-owner user b/22760654
-                if (!um.isAdminUser()) {
-                    keys.add(KEY_SYSTEM_UPDATE_SETTINGS);
-                }
-                if (!context.getResources().getBoolean(
-                        R.bool.config_additional_system_update_setting_enable)) {
-                    keys.add(KEY_UPDATE_SETTING);
-                }
                 return keys;
             }
 
@@ -563,4 +608,59 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
             }
         };
 
+    /**
+     * Returns the Hardware value in /proc/cpuinfo, else returns "Unknown".
+     * @return a string that describes the processor
+     */
+    private static String getDeviceProcessorInfo() {
+        // SoC : XYZ
+        final String PROC_HARDWARE_SOC = "Hardware\\s*:\\s*(.*?)(?:\\(.*)?$"; /* SoC string */
+
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(FILENAME_PROC_CPUINFO));
+            String cpuinfo;
+
+            try {
+                while (null != (cpuinfo = reader.readLine())) {
+                    if (cpuinfo.startsWith("Hardware")) {
+                        Matcher m = Pattern.compile(PROC_HARDWARE_SOC).matcher(cpuinfo);
+                        if (m.matches()) {
+                            return m.group(1);
+                        }
+                    }
+                }
+                return "Unknown";
+            } finally {
+                reader.close();
+            }
+        } catch (IOException e) {
+            Log.e(LOG_TAG,
+                "IO Exception when getting cpuinfo for Device Info screen",
+                e);
+
+            return "Unknown";
+        }
+    }
+
+    private String getDeviceMemoryInfo() {
+        String result = null;
+
+        try {
+            /* /proc/meminfo entries follow this format:
+             * MemTotal:         362096 kB
+             * MemFree:           29144 kB
+             * Buffers:            5236 kB
+             * Cached:            81652 kB
+             */
+            String firstLine = readLine(FILENAME_PROC_MEMINFO);
+            if (firstLine != null) {
+                String parts[] = firstLine.split("\\s+");
+                if (parts.length == 3) {
+                    result = Long.parseLong(parts[1])/1024 + " MB";
+                }
+            }
+        } catch (IOException e) {}
+
+        return result;
+    }
 }

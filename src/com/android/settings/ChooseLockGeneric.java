@@ -359,7 +359,8 @@ public class ChooseLockGeneric extends SettingsActivity {
             mWaitingForConfirmation = false;
             if (requestCode == CONFIRM_EXISTING_REQUEST && resultCode == Activity.RESULT_OK) {
                 mPasswordConfirmed = true;
-                mUserPassword = data.getStringExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD);
+                mUserPassword = data == null ? null :
+                        data.getStringExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD);
                 updatePreferencesOrFinish();
                 if (mForChangeCredRequiredForBoot) {
                     if (!TextUtils.isEmpty(mUserPassword)) {
@@ -796,6 +797,10 @@ public class ChooseLockGeneric extends SettingsActivity {
         }
 
         private void removeManagedProfileFingerprintsAndFinishIfNecessary(final int parentUserId) {
+            if (getActivity() == null) { // Activity has been detached, so just finish it
+                finish();
+                return;
+            }
             mFingerprintManager.setActiveUser(UserHandle.myUserId());
             final UserManager um = UserManager.get(getActivity());
             boolean hasChildProfile = false;

@@ -89,6 +89,12 @@ public class WriteSettingsDetails extends AppInfoWithHeader implements OnPrefere
     }
 
     @Override
+    public void onDestroy() {
+        mAppBridge.release();
+        super.onDestroy();
+    }
+
+    @Override
     public boolean onPreferenceClick(Preference preference) {
         if (preference == mWriteSettingsPrefs) {
             if (mSettingsIntent != null) {
@@ -134,6 +140,10 @@ public class WriteSettingsDetails extends AppInfoWithHeader implements OnPrefere
 
     @Override
     protected boolean refreshUi() {
+        if (mPackageInfo.applicationInfo == null) {
+            return false;
+        }
+
         mWriteSettingsState = mAppBridge.getWriteSettingsInfo(mPackageName,
                 mPackageInfo.applicationInfo.uid);
 

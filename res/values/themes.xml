@@ -193,16 +193,16 @@
         <item name="android:contentInsetStart">@dimen/actionbar_subsettings_contentInsetStart</item>
     </style>
 
-    <style name="ThemeOverlay.SwitchBar.Settings" parent="@*android:style/ThemeOverlay.DeviceDefault.Dark.ActionBar.Accent">
+    <style name="ThemeOverlay.SwitchBar.Settings" parent="@*android:style/ThemeOverlay.Material.Dark.ActionBar">
         <item name="switchBarMarginStart">@dimen/switchbar_subsettings_margin_start</item>
         <item name="switchBarMarginEnd">@dimen/switchbar_subsettings_margin_end</item>
-        <item name="switchBarBackgroundColor">?android:attr/colorSecondary</item>
+        <item name="switchBarBackgroundColor">@color/switchbar_background_color</item>
     </style>
 
     <style name="ThemeOverlay.SwitchBar.SubSettings" parent="@android:style/ThemeOverlay.Material.Dark.ActionBar">
         <item name="switchBarMarginStart">@dimen/switchbar_subsettings_margin_start</item>
         <item name="switchBarMarginEnd">@dimen/switchbar_subsettings_margin_end</item>
-        <item name="switchBarBackgroundColor">?android:attr/colorSecondary</item>
+        <item name="switchBarBackgroundColor">@color/switchbar_background_color</item>
     </style>
 
     <style name="Theme.DialogWhenLarge" parent="@*android:style/Theme.DeviceDefault.Settings.DialogWhenLarge">
@@ -306,5 +306,11 @@
 
     <style name="FallbackHomeProgressBar" parent="FallbackHome">
         <item name="android:colorControlActivated">?android:attr/textColorPrimary</item>
+    </style>
+
+    <style name="settings_pixel_theme">
+        <item name="android:colorPrimary">@color/pixel_primary_color</item>
+        <item name="android:colorPrimaryDark">@color/pixel_primary_color</item>
+        <item name="android:colorSecondary">@color/pixel_secondary_color</item>
     </style>
 </resources>

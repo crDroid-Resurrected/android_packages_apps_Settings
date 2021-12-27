@@ -231,9 +231,9 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
 
     private static final String KEY_CONVERT_FBE = "convert_to_file_encryption";
 
-    private static final String OTA_DISABLE_AUTOMATIC_UPDATE_KEY = "ota_disable_automatic_update";
-
     private static final String DEVELOPMENT_TOOLS = "development_tools";
+
+    private static final String FORCE_AUTHORIZE_SUBSTRATUM_PACKAGES = "force_authorize_substratum_packages";
 
     private static final int RESULT_DEBUG_APP = 1000;
     private static final int RESULT_MOCK_LOCATION_APP = 1001;
@@ -261,6 +261,8 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
     private boolean mHaveDebugSettings;
     private boolean mDontPokeProperties;
 
+    private SwitchPreference mForceAuthorizeSubstratumPackages;
+
     private SwitchPreference mEnableAdb;
     private SwitchPreference mAdbOverNetwork;
     private Preference mClearAdbKeys;
@@ -287,7 +289,6 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
     private SwitchPreference mWifiAggressiveHandover;
     private SwitchPreference mMobileDataAlwaysOn;
     private SwitchPreference mBluetoothDisableAbsVolume;
-    private SwitchPreference mOtaDisableAutomaticUpdate;
 
     private SwitchPreference mWifiAllowScansWithTraffic;
     private SwitchPreference mStrictMode;
@@ -307,9 +308,9 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
     private ListPreference mUsbConfiguration;
     private ListPreference mTrackFrameTime;
     private ListPreference mShowNonRectClip;
-    private ListPreference mWindowAnimationScale;
-    private ListPreference mTransitionAnimationScale;
-    private ListPreference mAnimatorDurationScale;
+    private AnimationScalePreference mWindowAnimationScale;
+    private AnimationScalePreference mTransitionAnimationScale;
+    private AnimationScalePreference mAnimatorDurationScale;
     private ListPreference mOverlayDisplayDevices;
 
     private SwitchPreference mWebViewMultiprocess;
@@ -427,6 +428,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         mForceAllowOnExternal = findAndInitSwitchPref(FORCE_ALLOW_ON_EXTERNAL_KEY);
         mPassword = (PreferenceScreen) findPreference(LOCAL_BACKUP_PASSWORD);
         mAllPrefs.add(mPassword);
+        mForceAuthorizeSubstratumPackages = findAndInitSwitchPref(FORCE_AUTHORIZE_SUBSTRATUM_PACKAGES);
 
         if (!mUm.isAdminUser()) {
             disableForUser(mEnableAdb);
@@ -434,6 +436,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             disableForUser(mEnableTerminal);
             disableForUser(mPassword);
             disableForUser(mUpdateRecoveryPreference);
+            disableForUser(mForceAuthorizeSubstratumPackages);
         }
 
         mDebugAppPref = findPreference(DEBUG_APP_KEY);
@@ -488,13 +491,14 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         mWebViewMultiprocess = findAndInitSwitchPref(WEBVIEW_MULTIPROCESS_KEY);
         mBluetoothDisableAbsVolume = findAndInitSwitchPref(BLUETOOTH_DISABLE_ABSOLUTE_VOLUME_KEY);
 
-        mWindowAnimationScale = addListPreference(WINDOW_ANIMATION_SCALE_KEY);
-        mTransitionAnimationScale = addListPreference(TRANSITION_ANIMATION_SCALE_KEY);
-        mAnimatorDurationScale = addListPreference(ANIMATOR_DURATION_SCALE_KEY);
         mOverlayDisplayDevices = addListPreference(OVERLAY_DISPLAY_DEVICES_KEY);
         mSimulateColorSpace = addListPreference(SIMULATE_COLOR_SPACE);
         mUSBAudio = findAndInitSwitchPref(USB_AUDIO_KEY);
         mForceResizable = findAndInitSwitchPref(FORCE_RESIZABLE_KEY);
+
+        mWindowAnimationScale = findAndInitAnimationScalePreference(WINDOW_ANIMATION_SCALE_KEY);
+        mTransitionAnimationScale = findAndInitAnimationScalePreference(TRANSITION_ANIMATION_SCALE_KEY);
+        mAnimatorDurationScale = findAndInitAnimationScalePreference(ANIMATOR_DURATION_SCALE_KEY);
 
         mImmediatelyDestroyActivities = (SwitchPreference) findPreference(
                 IMMEDIATELY_DESTROY_ACTIVITIES_KEY);
@@ -531,12 +535,6 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             removePreference(KEY_CONVERT_FBE);
         }
 
-        mOtaDisableAutomaticUpdate = findAndInitSwitchPref(OTA_DISABLE_AUTOMATIC_UPDATE_KEY);
-        if (!SystemProperties.getBoolean("ro.build.ab_update", false)) {
-            removePreference(mOtaDisableAutomaticUpdate);
-            mOtaDisableAutomaticUpdate = null;
-        }
-
         mColorModePreference = (ColorModePreference) findPreference(KEY_COLOR_MODE);
         mColorModePreference.updateCurrentAndSupported();
         if (mColorModePreference.getColorModeCount() < 2) {
@@ -561,7 +559,8 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         mRootAppops.setOnPreferenceClickListener(this);
 
         if (!removeRootOptionsIfRequired()) {
-            if (FileUtils.fileExists("/system/xbin/su")) {
+            if (FileUtils.fileExists("/system/xbin/su") ||
+                    FileUtils.fileExists("/system/app/MagiskManager/MagiskManager.apk")) {
                 mRootAccess.setEntries(R.array.root_access_entries);
                 mRootAccess.setEntryValues(R.array.root_access_values);
             } else {
@@ -598,6 +597,14 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             pref.setEnabled(false);
             mDisabledPrefs.add(pref);
         }
+    }
+
+    private AnimationScalePreference findAndInitAnimationScalePreference(String key) {
+        AnimationScalePreference pref = (AnimationScalePreference) findPreference(key);
+        pref.setOnPreferenceChangeListener(this);
+        pref.setOnPreferenceClickListener(this);
+        mAllPrefs.add(pref);
+        return pref;
     }
 
     private SwitchPreference findAndInitSwitchPref(String key) {
@@ -687,7 +694,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
 
         final ContentResolver cr = getActivity().getContentResolver();
         mLastEnabledState = Settings.Global.getInt(cr,
-                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 0;
+                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1) == 1;
         mSwitchBar.setChecked(mLastEnabledState);
         setPrefsEnabledState(mLastEnabledState);
 
@@ -789,9 +796,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         updateAppProcessLimitOptions();
         updateShowAllANRsOptions();
         updateVerifyAppsOverUsbOptions();
-        if (mOtaDisableAutomaticUpdate != null) {
-            updateOtaDisableAutomaticUpdateOptions();
-        }
+        updateOtaDisableAutomaticUpdateOptions();
         updateBugreportOptions();
         updateForceRtlOptions();
         updateLogdSizeValues();
@@ -814,6 +819,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         updateRootAccessOptions();
         updateAdbOverNetwork();
         updateUpdateRecoveryOptions();
+        updateForceAuthorizeSubstratumPackagesOptions();
     }
 
     private void updateAdbOverNetwork() {
@@ -842,6 +848,17 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         } else {
             mAdbOverNetwork.setSummary(R.string.adb_over_network_summary);
         }
+    }
+
+    private void writeForceAuthorizeSubstratumPackagesOptions() {
+        Settings.Secure.putInt(getActivity().getContentResolver(),
+                Settings.Secure.FORCE_AUTHORIZE_SUBSTRATUM_PACKAGES,
+                mForceAuthorizeSubstratumPackages.isChecked() ? 1 : 0);
+    }
+
+    private void updateForceAuthorizeSubstratumPackagesOptions() {
+        mForceAuthorizeSubstratumPackages.setChecked(Settings.Secure.getInt(getActivity().getContentResolver(),
+                Settings.Secure.FORCE_AUTHORIZE_SUBSTRATUM_PACKAGES, 0) != 0);
     }
 
     private void resetDangerousOptions() {
@@ -1150,21 +1167,9 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
     }
 
     private void updateOtaDisableAutomaticUpdateOptions() {
-        // We use the "disabled status" in code, but show the opposite text
-        // "Automatic system updates" on screen. So a value 0 indicates the
-        // automatic update is enabled.
-        updateSwitchPreference(mOtaDisableAutomaticUpdate, Settings.Global.getInt(
-                getActivity().getContentResolver(),
-                Settings.Global.OTA_DISABLE_AUTOMATIC_UPDATE, 0) != 1);
-    }
-
-    private void writeOtaDisableAutomaticUpdateOptions() {
-        // We use the "disabled status" in code, but show the opposite text
-        // "Automatic system updates" on screen. So a value 0 indicates the
-        // automatic update is enabled.
+        // Actually disable OTA updates.
         Settings.Global.putInt(getActivity().getContentResolver(),
-                Settings.Global.OTA_DISABLE_AUTOMATIC_UPDATE,
-                mOtaDisableAutomaticUpdate.isChecked() ? 0 : 1);
+                Settings.Global.OTA_DISABLE_AUTOMATIC_UPDATE, 1);
     }
 
     private boolean enableVerifierSetting() {
@@ -1899,23 +1904,13 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
                 getActivity().getContentResolver(), Settings.Global.ALWAYS_FINISH_ACTIVITIES, 0) != 0);
     }
 
-    private void updateAnimationScaleValue(int which, ListPreference pref) {
+    private void updateAnimationScaleValue(int which, AnimationScalePreference pref) {
         try {
             float scale = mWindowManager.getAnimationScale(which);
-            if (scale != 1) {
+            if (scale != 0.6f) {
                 mHaveDebugSettings = true;
             }
-            CharSequence[] values = pref.getEntryValues();
-            for (int i=0; i<values.length; i++) {
-                float val = Float.parseFloat(values[i].toString());
-                if (scale <= val) {
-                    pref.setValueIndex(i);
-                    pref.setSummary(pref.getEntries()[i]);
-                    return;
-                }
-            }
-            pref.setValueIndex(values.length-1);
-            pref.setSummary(pref.getEntries()[0]);
+            pref.setScale(scale);
         } catch (RemoteException e) {
         }
     }
@@ -1926,9 +1921,10 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         updateAnimationScaleValue(2, mAnimatorDurationScale);
     }
 
-    private void writeAnimationScaleOption(int which, ListPreference pref, Object newValue) {
+    private void writeAnimationScaleOption(int which, AnimationScalePreference pref,
+            Object newValue) {
         try {
-            float scale = newValue != null ? Float.parseFloat(newValue.toString()) : 1;
+            float scale = newValue != null ? Float.parseFloat(newValue.toString()) : 0.6f;
             mWindowManager.setAnimationScale(which, scale);
             updateAnimationScaleValue(which, pref);
         } catch (RemoteException e) {
@@ -2114,6 +2110,11 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             intent.setClass(mActivity, AppOpsSummaryActivity.class);
             mActivity.startActivity(intent);
             return true;
+        } else if (preference == mWindowAnimationScale ||
+                preference == mTransitionAnimationScale ||
+                preference == mAnimatorDurationScale) {
+            ((AnimationScalePreference) preference).click();
+            return true;
         }
         return false;
     }
@@ -2212,8 +2213,6 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             writeDebuggerOptions();
         } else if (preference == mVerifyAppsOverUsb) {
             writeVerifyAppsOverUsbOptions();
-        } else if (preference == mOtaDisableAutomaticUpdate) {
-            writeOtaDisableAutomaticUpdateOptions();
         } else if (preference == mStrictMode) {
             writeStrictModeVisualOptions();
         } else if (preference == mPointerLocation) {
@@ -2256,6 +2255,8 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             writeUSBAudioOptions();
         } else if (preference == mForceResizable) {
             writeForceResizableOptions();
+        } else if (preference == mForceAuthorizeSubstratumPackages) {
+            writeForceAuthorizeSubstratumPackagesOptions();
         } else if (INACTIVE_APPS_KEY.equals(preference.getKey())) {
             startInactiveAppsFragment();
         } else if (BACKGROUND_CHECK_KEY.equals(preference.getKey())) {
@@ -2292,7 +2293,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
             return super.onPreferenceTreeClick(preference);
         }
 
-        return false;
+        return true;
     }
 
     private void startInactiveAppsFragment() {
@@ -2557,7 +2558,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
         }
     }
 
-    private static boolean isPackageInstalled(Context context, String packageName) {
+    public static boolean isPackageInstalled(Context context, String packageName) {
         try {
             return context.getPackageManager().getPackageInfo(packageName, 0) != null;
         } catch (NameNotFoundException e) {
@@ -2576,7 +2577,7 @@ public class DevelopmentSettings extends RestrictedSettingsFragment
                     return context.getSharedPreferences(DevelopmentSettings.PREF_FILE,
                             Context.MODE_PRIVATE).getBoolean(
                                     DevelopmentSettings.PREF_SHOW,
-                                    android.os.Build.TYPE.equals("eng"));
+                                    true);
                 }
 
                 @Override

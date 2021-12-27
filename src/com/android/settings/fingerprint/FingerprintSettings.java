@@ -51,6 +51,7 @@ import android.text.SpannableStringBuilder;
 import android.text.TextPaint;
 import android.text.method.LinkMovementMethod;
 import android.text.style.URLSpan;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -308,10 +309,14 @@ public class FingerprintSettings extends SubSettings {
                     R.layout.fingerprint_settings_footer, null);
             EnforcedAdmin admin = RestrictedLockUtils.checkIfKeyguardFeaturesDisabled(
                     getActivity(), DevicePolicyManager.KEYGUARD_DISABLE_FINGERPRINT, mUserId);
-            v.setText(LearnMoreSpan.linkify(getText(admin != null
+            final CharSequence msg = getText(admin != null
                             ? R.string.security_settings_fingerprint_enroll_disclaimer_lockscreen_disabled
-                            : R.string.security_settings_fingerprint_enroll_disclaimer),
-                    getString(getHelpResource()), admin));
+                            : R.string.security_settings_fingerprint_enroll_disclaimer);
+            if (TextUtils.isEmpty(getString(getHelpResource()))) {
+                v.setText(msg);
+            } else {
+                v.setText(LearnMoreSpan.linkify(msg, getString(getHelpResource()), admin));
+            }
             v.setMovementMethod(new LinkMovementMethod());
             setFooterView(v);
         }
@@ -747,7 +752,7 @@ public class FingerprintSettings extends SubSettings {
     };
 
     private static class LearnMoreSpan extends URLSpan {
-
+        private static final String TAG = "LearnMoreSpan";
         private static final Typeface TYPEFACE_MEDIUM =
                 Typeface.create("sans-serif-medium", Typeface.NORMAL);
 
@@ -772,6 +777,10 @@ public class FingerprintSettings extends SubSettings {
                 RestrictedLockUtils.sendShowAdminSupportDetailsIntent(ctx, mEnforcedAdmin);
             } else {
                 Intent intent = HelpUtils.getHelpIntent(ctx, getURL(), ctx.getClass().getName());
+                if (intent == null) {
+                    Log.w(LearnMoreSpan.TAG, "Null help intent.");
+                    return;
+                }
                 try {
                     widget.startActivityForResult(intent, 0);
                 } catch (ActivityNotFoundException e) {

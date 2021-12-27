@@ -249,7 +249,7 @@ public final class BluetoothDevicePreference extends Preference implements
             data.screenTitle = context.getResources().getString(R.string.bluetooth_settings);
             data.iconResId = R.drawable.ic_settings_bluetooth;
             data.enabled = true;
-
+            Index.getInstance(context).deleteIndexableData(data);
             Index.getInstance(context).updateFromSearchIndexableData(data);
         }
     }
@@ -286,11 +286,11 @@ public final class BluetoothDevicePreference extends Preference implements
             }
         }
         if (btClass != null) {
-            if (btClass.doesClassMatch(BluetoothClass.PROFILE_A2DP)) {
-                return new Pair<Integer, String>(R.drawable.ic_bt_headphones_a2dp, HEADPHONE);
-            }
-            if (btClass.doesClassMatch(BluetoothClass.PROFILE_HEADSET)) {
+          if (btClass.doesClassMatch(BluetoothClass.PROFILE_HEADSET)) {
                 return new Pair<Integer, String>(R.drawable.ic_bt_headset_hfp, HEADSET);
+            }
+          if (btClass.doesClassMatch(BluetoothClass.PROFILE_A2DP)) {
+                return new Pair<Integer, String>(R.drawable.ic_bt_headphones_a2dp, HEADPHONE);
             }
         }
         return new Pair<Integer, String>(R.drawable.ic_settings_bluetooth, BLUETOOTH);
