@@ -16,8 +16,6 @@
 
 package com.android.settings;
 
-import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
-
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -32,8 +30,6 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -61,22 +57,6 @@ public final class SmsDefaultDialog extends AlertActivity implements
         if (!buildDialog(packageName)) {
             finish();
         }
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        getWindow().addPrivateFlags(PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
-        android.util.EventLog.writeEvent(0x534e4554, "120484087", -1, "");
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        final Window window = getWindow();
-        final WindowManager.LayoutParams attrs = window.getAttributes();
-        attrs.privateFlags &= ~PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
-        window.setAttributes(attrs);
     }
 
     @Override

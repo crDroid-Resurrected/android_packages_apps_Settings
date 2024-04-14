@@ -109,11 +109,6 @@ public abstract class ConfirmDeviceCredentialBaseActivity extends SettingsActivi
         }
     }
 
-    @Override
-    public boolean isLaunchableInTaskModePinned() {
-        return true;
-    }
-
     public void prepareEnterAnimation() {
         final ConfirmDeviceCredentialBaseFragment f = getFragment();
         if (f != null) {

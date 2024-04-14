@@ -534,7 +534,14 @@ public class ManageAccountsSettings extends AccountPreferenceBase
         ActivityInfo resolvedActivityInfo = resolveInfo.activityInfo;
         ApplicationInfo resolvedAppInfo = resolvedActivityInfo.applicationInfo;
         try {
-            // Allows to launch only authenticator owned activities.
+            if (resolvedActivityInfo.exported) {
+                if (resolvedActivityInfo.permission == null) {
+                    return true; // exported activity without permission.
+                } else if (pm.checkPermission(resolvedActivityInfo.permission,
+                        authDesc.packageName) == PackageManager.PERMISSION_GRANTED) {
+                    return true;
+                }
+            }
             ApplicationInfo authenticatorAppInf = pm.getApplicationInfo(authDesc.packageName, 0);
             return  resolvedAppInfo.uid == authenticatorAppInf.uid;
         } catch (NameNotFoundException e) {

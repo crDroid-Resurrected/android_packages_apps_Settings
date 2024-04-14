@@ -30,7 +30,6 @@ import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
-import android.util.EventLog;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -50,8 +49,6 @@ import com.android.settingslib.bluetooth.LocalBluetoothManager;
 import com.android.settingslib.bluetooth.LocalBluetoothProfile;
 
 import java.util.Locale;
-
-import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
 
 /**
  * BluetoothPairingDialog asks the user to enter a PIN / Passkey / simple confirmation
@@ -104,8 +101,6 @@ public final class BluetoothPairingDialog extends AlertActivity implements
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mReceiverRegistered = false;
-
-        getWindow().addPrivateFlags(PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
 
         Intent intent = getIntent();
         if (!intent.getAction().equals(BluetoothDevice.ACTION_PAIRING_REQUEST)) {
@@ -300,9 +295,8 @@ public final class BluetoothPairingDialog extends AlertActivity implements
         } else {
             if (mDevice.getBluetoothClass().getDeviceClass()
                     == BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE) {
-                contactSharing.setChecked(false);
-                mDevice.setPhonebookAccessPermission(BluetoothDevice.ACCESS_REJECTED);
-                EventLog.writeEvent(0x534e4554, "73173182", -1, "");
+                contactSharing.setChecked(true);
+                mDevice.setPhonebookAccessPermission(BluetoothDevice.ACCESS_ALLOWED);
             } else {
                 contactSharing.setChecked(false);
                 mDevice.setPhonebookAccessPermission(BluetoothDevice.ACCESS_REJECTED);

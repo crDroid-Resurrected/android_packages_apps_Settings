@@ -106,11 +106,9 @@ public class ScreenPinningSettings extends SettingsPreferenceFragment
     }
 
     private boolean isScreenLockUsed() {
-        // This functionality should be kept consistent with
-        // com.android.server.am.ActivityStackSupervisor (see b/127605586)
-        int defaultValueIfSettingNull = mLockPatternUtils.isSecure(UserHandle.myUserId()) ? 1 : 0;
+        int def = getCurrentSecurityTitle() != R.string.screen_pinning_unlock_none ? 1 : 0;
         return Settings.Secure.getInt(getContentResolver(),
-                Settings.Secure.LOCK_TO_APP_EXIT_LOCKED, defaultValueIfSettingNull) != 0;
+                Settings.Secure.LOCK_TO_APP_EXIT_LOCKED, def) != 0;
     }
 
     private boolean setScreenLockUsed(boolean isEnabled) {

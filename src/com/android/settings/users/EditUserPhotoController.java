@@ -19,7 +19,6 @@ package com.android.settings.users;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.ClipData;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -38,7 +37,6 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.MediaStore;
-import android.util.EventLog;
 import android.support.v4.content.FileProvider;
 import android.util.Log;
 import android.view.Gravity;
@@ -113,14 +111,6 @@ public class EditUserPhotoController {
         }
         final Uri pictureUri = data != null && data.getData() != null
                 ? data.getData() : mTakePictureUri;
-
-        // Check if the result is a content uri
-        if (!ContentResolver.SCHEME_CONTENT.equals(pictureUri.getScheme())) {
-            Log.e(TAG, "Invalid pictureUri scheme: " + pictureUri.getScheme());
-            EventLog.writeEvent(0x534e4554, "172939189", -1, pictureUri.getPath());
-            return false;
-        }
-
         switch (requestCode) {
             case REQUEST_CODE_CROP_PHOTO:
                 onPhotoCropped(pictureUri, true);

@@ -49,6 +49,8 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
     Context mContext;
     int mRequestType;
     BluetoothDevice mDevice;
+    String mReturnPackage = null;
+    String mReturnClass = null;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -68,10 +70,11 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
             mDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             mRequestType = intent.getIntExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                                                  BluetoothDevice.REQUEST_TYPE_PROFILE_CONNECTION);
+            mReturnPackage = intent.getStringExtra(BluetoothDevice.EXTRA_PACKAGE_NAME);
+            mReturnClass = intent.getStringExtra(BluetoothDevice.EXTRA_CLASS_NAME);
 
-            if (DEBUG) {
-                Log.d(TAG, "onReceive request type: " + mRequestType);
-            }
+            if (DEBUG) Log.d(TAG, "onReceive request type: " + mRequestType + " return "
+                    + mReturnPackage + "," + mReturnClass);
 
             // Even if the user has already made the choice, Bluetooth still may not know that if
             // the user preference data have not been migrated from Settings app's shared
@@ -100,6 +103,8 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
             connectionAccessIntent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                                             mRequestType);
             connectionAccessIntent.putExtra(BluetoothDevice.EXTRA_DEVICE, mDevice);
+            connectionAccessIntent.putExtra(BluetoothDevice.EXTRA_PACKAGE_NAME, mReturnPackage);
+            connectionAccessIntent.putExtra(BluetoothDevice.EXTRA_CLASS_NAME, mReturnClass);
 
             String deviceAddress = mDevice != null ? mDevice.getAddress() : null;
             String deviceName = mDevice != null ? mDevice.getName() : null;
@@ -119,7 +124,6 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
                 // "Clear All Notifications" button
 
                 Intent deleteIntent = new Intent(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
-                deleteIntent.setPackage("com.android.bluetooth");
                 deleteIntent.putExtra(BluetoothDevice.EXTRA_DEVICE, mDevice);
                 deleteIntent.putExtra(BluetoothDevice.EXTRA_CONNECTION_ACCESS_RESULT,
                         BluetoothDevice.CONNECTION_ACCESS_NO);
@@ -128,13 +132,13 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
                 switch (mRequestType) {
                     case BluetoothDevice.REQUEST_TYPE_PHONEBOOK_ACCESS:
                         title = context.getString(R.string.bluetooth_phonebook_request);
-                        message = context.getString(
-                                R.string.bluetooth_phonebook_access_notification_content);
+                        message = context.getString(R.string.bluetooth_pb_acceptance_dialog_text,
+                                deviceAlias, deviceAlias);
                         break;
                     case BluetoothDevice.REQUEST_TYPE_MESSAGE_ACCESS:
                         title = context.getString(R.string.bluetooth_map_request);
-                        message = context.getString(
-                                R.string.bluetooth_message_access_notification_content);
+                        message = context.getString(R.string.bluetooth_map_acceptance_dialog_text,
+                                deviceAlias, deviceAlias);
                         break;
                     case BluetoothDevice.REQUEST_TYPE_SIM_ACCESS:
                         title = context.getString(R.string.bluetooth_sap_request);
@@ -151,7 +155,6 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
                         .setContentTitle(title)
                         .setTicker(message)
                         .setContentText(message)
-                        .setStyle(new Notification.BigTextStyle().bigText(message))
                         .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
                         .setAutoCancel(true)
                         .setPriority(Notification.PRIORITY_MAX)
@@ -211,7 +214,7 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
 
         LocalBluetoothManager bluetoothManager = Utils.getLocalBtManager(mContext);
         CachedBluetoothDeviceManager cachedDeviceManager =
-                bluetoothManager.getCachedDeviceManager();
+            bluetoothManager.getCachedDeviceManager();
         CachedBluetoothDevice cachedDevice = cachedDeviceManager.findDevice(mDevice);
         if (cachedDevice == null) {
             cachedDevice = cachedDeviceManager.addDevice(bluetoothManager.getBluetoothAdapter(),
@@ -270,9 +273,13 @@ public final class BluetoothPermissionRequest extends BroadcastReceiver {
     private void sendReplyIntentToReceiver(final boolean allowed) {
         Intent intent = new Intent(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
 
+        if (mReturnPackage != null && mReturnClass != null) {
+            intent.setClassName(mReturnPackage, mReturnClass);
+        }
+
         intent.putExtra(BluetoothDevice.EXTRA_CONNECTION_ACCESS_RESULT,
-                allowed ? BluetoothDevice.CONNECTION_ACCESS_YES
-                        : BluetoothDevice.CONNECTION_ACCESS_NO);
+                        allowed ? BluetoothDevice.CONNECTION_ACCESS_YES
+                                : BluetoothDevice.CONNECTION_ACCESS_NO);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mDevice);
         intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE, mRequestType);
         mContext.sendBroadcast(intent, android.Manifest.permission.BLUETOOTH_ADMIN);
